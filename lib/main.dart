@@ -15,6 +15,9 @@ import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+/// Opciones para ordenar la lista de productos.
+enum SortOption { proveedor, nombre, categoria }
+
 void main() async {
   // Ensure that plugin services are initialized so that `path_provider`
   // and `shared_preferences` can be used before `runApp()`.
@@ -53,6 +56,7 @@ class _MainScreenState extends State<MainScreen> {
   List<String> _proveedores = [];
   final _settingsService = SettingsService();
   final _searchController = TextEditingController();
+  SortOption _sortOption = SortOption.proveedor;
   String _searchQuery = '';
 
   @override
@@ -137,19 +141,13 @@ class _MainScreenState extends State<MainScreen> {
     if (!mounted) return;
     final List<dynamic> data = json.decode(jsonString);
     _todosLosProductos = data.map((json) => Producto.fromJson(json)).toList();
-    _todosLosProductos.sort((a, b) {
-      int compare = a.proveedor.compareTo(b.proveedor);
-      if (compare == 0) {
-        return a.nombre.compareTo(b.nombre);
-      }
-      return compare;
-    });
     _categorias = _generarListaUnica((p) => p.categoria);
     _proveedores = _generarListaUnica((p) => p.proveedor);
 
     if (mounted) {
       setState(() {
-        _productosFiltrados = _todosLosProductos;
+        // Llama a _filtrarProductos para establecer la lista inicial con el orden por defecto.
+        _filtrarProductos();
         _isLoading = false;
       });
     }
@@ -158,7 +156,7 @@ class _MainScreenState extends State<MainScreen> {
   void _filtrarProductos() {
     // Esta función ahora solo calcula la lista filtrada.
     // El `setState` es llamado por los manejadores de eventos que la invocan.
-    _productosFiltrados = _todosLosProductos.where((producto) {
+    List<Producto> productosTemp = _todosLosProductos.where((producto) {
       final matchCategoria =
           _categoriaSeleccionada == null ||
           producto.categoria == _categoriaSeleccionada;
@@ -173,13 +171,33 @@ class _MainScreenState extends State<MainScreen> {
 
       return matchCategoria && matchProveedor && matchSearch;
     }).toList();
-    _productosFiltrados.sort((a, b) {
-      int compare = a.proveedor.compareTo(b.proveedor);
-      if (compare == 0) {
-        return a.nombre.compareTo(b.nombre);
-      }
-      return compare;
-    });
+
+    // Aplica el ordenamiento basado en la opción seleccionada.
+    switch (_sortOption) {
+      case SortOption.nombre:
+        productosTemp.sort((a, b) => a.nombre.compareTo(b.nombre));
+        break;
+      case SortOption.categoria:
+        productosTemp.sort((a, b) {
+          int compare = a.categoria.compareTo(b.categoria);
+          if (compare == 0) {
+            return a.nombre.compareTo(b.nombre); // Orden secundario por nombre
+          }
+          return compare;
+        });
+        break;
+      case SortOption.proveedor:
+        //default:
+        productosTemp.sort((a, b) {
+          int compare = a.proveedor.compareTo(b.proveedor);
+          if (compare == 0) {
+            return a.nombre.compareTo(b.nombre); // Orden secundario por nombre
+          }
+          return compare;
+        });
+        break;
+    }
+    _productosFiltrados = productosTemp;
   }
 
   void _navegarYAgregarProducto() async {
@@ -421,55 +439,100 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                       ),
                       const SizedBox(height: 8.0),
-                      Wrap(
-                        spacing: 8.0, // Espacio horizontal entre widgets
-                        runSpacing: 8.0, // Espacio vertical
-                        alignment: WrapAlignment.end,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // LISTA DESPLEGABLE
-                          DropdownButton<String>(
-                            hint: const Text('Filtrar por categoría'),
-                            value: _categoriaSeleccionada ?? 'Todos',
-                            items: _categorias.map((cat) {
-                              return DropdownMenuItem<String>(
-                                value: cat,
-                                child: Text(
-                                  cat,
-                                  style: const TextStyle(fontSize: 12),
+                          Expanded(
+                            child: DropdownButton<SortOption>(
+                              isExpanded: true,
+                              hint: const Text('Ordenar por'),
+                              value: _sortOption,
+                              items: const [
+                                DropdownMenuItem(
+                                  value: SortOption.proveedor,
+                                  child: Text(
+                                    'Por Proveedor',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12),
+                                  ),
                                 ),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                _categoriaSeleccionada = val == 'Todos'
-                                    ? null
-                                    : val;
-                                _filtrarProductos();
-                              });
-                            },
+                                DropdownMenuItem(
+                                  value: SortOption.nombre,
+                                  child: Text(
+                                    'Por Nombre',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: SortOption.categoria,
+                                  child: Text(
+                                    'Por Categoría',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (SortOption? newValue) {
+                                if (newValue == null) return;
+                                setState(() {
+                                  _sortOption = newValue;
+                                  _filtrarProductos();
+                                });
+                              },
+                            ),
                           ),
-                          // LISTA DESPLEGABLE DE PROVEEDORES
-                          DropdownButton<String>(
-                            hint: const Text('Filtrar por proveedor'),
-                            value: _proveedorSeleccionado ?? 'Todos',
-                            items: _proveedores.map((prov) {
-                              return DropdownMenuItem<String>(
-                                value: prov,
-                                child: Text(
-                                  prov,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                _proveedorSeleccionado = val == 'Todos'
-                                    ? null
-                                    : val;
-                                _filtrarProductos();
-                              });
-                            },
+                          const SizedBox(width: 8.0),
+                          Expanded(
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              hint: const Text('Categoría'),
+                              value: _categoriaSeleccionada ?? 'Todos',
+                              items: _categorias.map((cat) {
+                                return DropdownMenuItem<String>(
+                                  value: cat,
+                                  child: Text(
+                                    cat,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                setState(() {
+                                  _categoriaSeleccionada = val == 'Todos'
+                                      ? null
+                                      : val;
+                                  _filtrarProductos();
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8.0),
+                          Expanded(
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              hint: const Text('Proveedor'),
+                              value: _proveedorSeleccionado ?? 'Todos',
+                              items: _proveedores.map((prov) {
+                                return DropdownMenuItem<String>(
+                                  value: prov,
+                                  child: Text(
+                                    prov,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                setState(() {
+                                  _proveedorSeleccionado = val == 'Todos'
+                                      ? null
+                                      : val;
+                                  _filtrarProductos();
+                                });
+                              },
+                            ),
                           ),
                         ],
                       ),
