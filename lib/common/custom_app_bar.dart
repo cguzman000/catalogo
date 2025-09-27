@@ -4,9 +4,8 @@ import 'package:flutter_catalogo/settings_service.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
-  final List<Widget>? actions;
 
-  const CustomAppBar({super.key, required this.title, this.actions});
+  const CustomAppBar({super.key, required this.title});
 
   Widget _buildLogo(String logoPath) {
     // The AppBar logo is typically the full logo (imagotipo).
@@ -54,7 +53,10 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 builder: (context, logoPath, child) => SizedBox(
                   width: 50,
                   height: 50,
-                  child: ClipOval(child: _buildLogo(logoPath)),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8.0),
+                    child: _buildLogo(logoPath),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -87,7 +89,9 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ],
       ),
-      actions: actions,
+      iconTheme: const IconThemeData(
+        color: Color(0xFFD32F2F),
+      ), // Color para el icono del drawer
     );
   }
 

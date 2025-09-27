@@ -71,9 +71,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Restaurar Configuración'),
+          title: const Text('Volver a Estado de Fábrica'),
           content: const Text(
-            'Esto restaurará el nombre de la empresa, logo y otros datos a sus valores por defecto. ¿Continuar?',
+            'Esta acción restaurará TODA la aplicación a su estado original:\n\n'
+            '• Se restaurará la configuración de la empresa (nombre, logo, etc.).\n'
+            '• Se eliminarán TODOS los productos agregados o modificados.\n\n'
+            'Esta acción no se puede deshacer. ¿Desea continuar?',
           ),
           actions: <Widget>[
             TextButton(
@@ -82,7 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             TextButton(
               style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Restaurar'),
+              child: const Text('Sí, restaurar todo'),
               onPressed: () => Navigator.of(context).pop(true),
             ),
           ],
@@ -91,12 +94,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirmed == true) {
-      await _settingsService.resetSettings();
+      await _settingsService.resetSettings(); // Resetea la configuración
+      await _settingsService.resetProducts(); // Resetea los productos
       if (mounted) {
         _loadSettings(); // Reload controllers with default values
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('La configuración ha sido restaurada.'),
+            content: Text(
+              'La aplicación ha sido restaurada al estado de fábrica.',
+            ),
             backgroundColor: Colors.blue,
           ),
         );
@@ -311,11 +317,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Icon(Icons.error),
           );
         }
+        //LOGO CIRCULAR
         return SizedBox(
           width: 40,
           height: 40,
-          child: ClipOval(
-            child: FittedBox(fit: BoxFit.cover, child: imageWidget),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8.0),
+            child: imageWidget,
           ),
         );
       },

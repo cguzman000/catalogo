@@ -361,7 +361,7 @@
     "PrecioOferta": 0.0,
     "Condicion": "",
     "Imagen": "assets/productos_imagenes/MERMELADA FRAMBUESA PURATOS 10*1KG.png",
-    "Activo": false
+    "Activo": true
   },
   {
     "Id": 29,
@@ -1121,7 +1121,7 @@
     "Id": 1757820586356,
     "Nombre": "ACEITE VEGETAL MERKAT 12*900ML",
     "UxCj": 12,
-    "Categoria": "MATERIAS GRASAS",
+    "Categoria": "ABARROTES",
     "Proveedor": "ALVI",
     "PrecioCompra": 1210.08,
     "PrecioVenta": 1512.6050420168067,

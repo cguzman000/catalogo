@@ -2,6 +2,7 @@ import org.gradle.api.tasks.compile.JavaCompile
 
 allprojects {
     repositories {
+        // Repositories for all projects
         google()
         mavenCentral()
     }
@@ -10,30 +11,24 @@ allprojects {
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
-        .get()
+        .get() // Redirect the build output to the root build/ directory
 rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {
+    // Redirect subproject build outputs
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
-}
-subprojects {
+
+    // All subprojects must be evaluated after the app module.
     project.evaluationDependsOn(":app")
+
+    // Force Java 11 compatibility for all subprojects (app and plugins)
+    project.tasks.withType<JavaCompile>().configureEach {
+        sourceCompatibility = JavaVersion.VERSION_11.toString()
+        targetCompatibility = JavaVersion.VERSION_11.toString()
+    }
 }
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
-}
-
-// Configura la versión de Java para todos los subproyectos
-subprojects {
-    project.tasks.withType<JavaCompile>().configureEach {
-        sourceCompatibility = "11"
-        targetCompatibility = "11"
-    }
-    project.tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        kotlinOptions {
-            jvmTarget = "11"
-        }
-    }
 }

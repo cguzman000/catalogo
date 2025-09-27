@@ -20,8 +20,10 @@ class SettingsService {
   static const String _keyProfitMargin = 'settings_profit_margin';
 
   // Notificadores de valor para una UI reactiva
-  final ValueNotifier<String> companyName = ValueNotifier('My Catalog');
-  final ValueNotifier<String> logoPath = ValueNotifier('assets/isotipo.png');
+  final ValueNotifier<String> companyName = ValueNotifier('Ktalog');
+  final ValueNotifier<String> logoPath = ValueNotifier(
+    'assets/icon_ktalog.png',
+  );
   final ValueNotifier<String> address = ValueNotifier('');
   final ValueNotifier<String> contact = ValueNotifier('');
   final ValueNotifier<double> iva = ValueNotifier(19.0);
@@ -32,8 +34,8 @@ class SettingsService {
 
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    companyName.value = prefs.getString(_keyNombreEmpresa) ?? 'My Catalog';
-    logoPath.value = prefs.getString(_keyLogoPath) ?? 'assets/isotipo.png';
+    companyName.value = prefs.getString(_keyNombreEmpresa) ?? 'Ktalog';
+    logoPath.value = prefs.getString(_keyLogoPath) ?? 'assets/icon_ktalog.png';
     address.value = prefs.getString(_keyDireccion) ?? '';
     contact.value = prefs.getString(_keyContacto) ?? '';
     iva.value = prefs.getDouble(_keyIva) ?? 19.0;

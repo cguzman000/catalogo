@@ -70,19 +70,10 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
             accountEmail: null, // No email to show
-            currentAccountPicture: ValueListenableBuilder<String>(
-              valueListenable: _settingsService.logoPath,
-              builder: (context, logoPath, child) {
-                // For the drawer, we prefer the icon-only version ('isotipo')
-                // if the full logo ('imagotipo') is selected.
-                final drawerLogoPath = (logoPath == 'assets/imagotipo.png')
-                    ? 'assets/isotipo.png'
-                    : logoPath;
-                return CircleAvatar(
-                  backgroundColor: Colors.white,
-                  child: _buildLogo(drawerLogoPath),
-                );
-              },
+            currentAccountPicture: CircleAvatar(
+              backgroundColor: Colors
+                  .transparent, // Fondo transparente para que el ClipOval funcione
+              child: ClipOval(child: _buildLogo('assets/icon_ktalog.png')),
             ),
             currentAccountPictureSize: const Size.square(64),
           ),

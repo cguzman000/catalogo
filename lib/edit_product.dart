@@ -395,18 +395,19 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
     // Check if it's just a number, no need to evaluate.
     if (double.tryParse(expression) != null &&
-        !expression.contains(RegExp(r'[\+\-\*\/]'))) {
+        !expression.contains(RegExp(r'[\+\-*/]'))) {
       return;
     }
 
     try {
-      Parser p = Parser();
-      Expression exp = p.parse(expression);
+      final parser = ShuntingYardParser();
+      final exp = parser.parse(expression);
       ContextModel cm = ContextModel();
-      double eval = exp.evaluate(EvaluationType.REAL, cm);
+      final evaluator = RealEvaluator(cm);
+      final eval = exp.accept(evaluator);
 
       // Update controller. This will reflect in the UI.
-      controller.text = eval.toStringAsFixed(2);
+      controller.text = (eval as double).toStringAsFixed(2);
     } catch (e) {
       debugPrint('Could not evaluate expression: "$expression". Error: $e');
       if (mounted) {

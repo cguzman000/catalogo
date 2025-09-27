@@ -3,17 +3,14 @@ import 'dart:io';
 import 'package:flutter/material.dart' hide Flow;
 import 'package:flutter_catalogo/producto.dart';
 import 'package:flutter_catalogo/settings_service.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_catalogo/common/app_footer.dart';
 import 'package:flutter_catalogo/common/app_drawer.dart';
 import 'package:flutter_catalogo/common/custom_app_bar.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter/services.dart' show ByteData, rootBundle;
-import 'package:flutter_catalogo/edit_product.dart'; // Ahora contiene ProductFormScreen
+import 'package:flutter_catalogo/common/animated_list_item.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_catalogo/edit_product.dart';
 import 'package:flutter_catalogo/product_list_item.dart';
-import 'package:printing/printing.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 
 /// Opciones para ordenar la lista de productos.
 enum SortOption { proveedor, nombre, categoria }
@@ -57,6 +54,7 @@ class _MainScreenState extends State<MainScreen> {
   final _settingsService = SettingsService();
   final _searchController = TextEditingController();
   SortOption _sortOption = SortOption.proveedor;
+  bool _isAscending = true; // true para ascendente, false para descendente
   String _searchQuery = '';
 
   @override
@@ -175,15 +173,19 @@ class _MainScreenState extends State<MainScreen> {
     // Aplica el ordenamiento basado en la opción seleccionada.
     switch (_sortOption) {
       case SortOption.nombre:
-        productosTemp.sort((a, b) => a.nombre.compareTo(b.nombre));
+        productosTemp.sort(
+          (a, b) => _isAscending
+              ? a.nombre.compareTo(b.nombre)
+              : b.nombre.compareTo(a.nombre),
+        );
         break;
       case SortOption.categoria:
         productosTemp.sort((a, b) {
           int compare = a.categoria.compareTo(b.categoria);
           if (compare == 0) {
-            return a.nombre.compareTo(b.nombre); // Orden secundario por nombre
+            compare = a.nombre.compareTo(b.nombre); // Orden secundario
           }
-          return compare;
+          return _isAscending ? compare : -compare;
         });
         break;
       case SortOption.proveedor:
@@ -191,9 +193,9 @@ class _MainScreenState extends State<MainScreen> {
         productosTemp.sort((a, b) {
           int compare = a.proveedor.compareTo(b.proveedor);
           if (compare == 0) {
-            return a.nombre.compareTo(b.nombre); // Orden secundario por nombre
+            compare = a.nombre.compareTo(b.nombre); // Orden secundario
           }
-          return compare;
+          return _isAscending ? compare : -compare;
         });
         break;
     }
@@ -262,136 +264,37 @@ class _MainScreenState extends State<MainScreen> {
     await _guardarProductosEnJson();
   }
 
-  Future<void> _generateAndPrintPdf() async {
-    final productosImprimir = _productosFiltrados
-        .where((p) => p.activo)
-        .toList();
-    final pdf = pw.Document();
-
-    final settingsService = SettingsService();
-    final companyName = settingsService.companyName.value;
-    final contactInfo = settingsService.contact.value;
-    final ivaFactor = 1 + (settingsService.iva.value / 100);
-    final logoPath = settingsService.logoPath.value;
-    // Cargar logo
-    Uint8List? logoBytes;
-    try {
-      logoBytes = await _loadImageBytes(logoPath);
-      // Fallback to default asset if local file fails but path is not default
-    } catch (e) {
-      debugPrint("Error al cargar el logo para el PDF: $e");
-      logoBytes = null;
+  String? _getHeaderTextForIndex(int index) {
+    // No hay encabezados si no se ordena por categoría o proveedor.
+    if (_sortOption != SortOption.categoria &&
+        _sortOption != SortOption.proveedor) {
+      return null;
     }
 
-    // Pre-cargar imágenes de productos
-    final List<Uint8List?> imagenesBytes = await Future.wait(
-      productosImprimir.map((p) async {
-        try {
-          return await _loadImageBytes(p.imagen);
-        } catch (e) {
-          debugPrint("Error al cargar imagen del producto ${p.nombre}: $e");
-          return null;
-        }
-      }),
-    );
+    final currentProduct = _productosFiltrados[index];
 
-    // --- PDF Styles ---
-    const PdfColor primaryColor = PdfColor.fromInt(0xFFD32F2F);
-    const PdfColor lightGreyColor = PdfColor.fromInt(0xFFEEEEEE);
-    const PdfColor darkGreyColor = PdfColor.fromInt(0xFF616161);
+    // Siempre muestra el encabezado para el primer elemento de la lista.
+    if (index == 0) {
+      return _sortOption == SortOption.categoria
+          ? currentProduct.categoria
+          : currentProduct.proveedor;
+    }
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(24),
-        header: (pw.Context context) {
-          return pw.Column(
-            children: [
-              pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.center,
-                children: [
-                  if (logoBytes != null)
-                    pw.Container(
-                      width: 60,
-                      height: 60,
-                      child: pw.Image(pw.MemoryImage(logoBytes)),
-                    ),
-                  if (logoBytes != null) pw.SizedBox(width: 16),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        companyName,
-                        style: pw.TextStyle(
-                          color: primaryColor,
-                          fontWeight: pw.FontWeight.bold,
-                          fontSize: 22,
-                        ),
-                      ),
-                      pw.Text(
-                        'Catálogo de Productos',
-                        style: pw.TextStyle(color: darkGreyColor, fontSize: 16),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 12),
-              pw.Divider(color: primaryColor, thickness: 2),
-              pw.SizedBox(height: 8),
-            ],
-          );
-        },
-        footer: (pw.Context context) {
-          return pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text(contactInfo, style: const pw.TextStyle(fontSize: 8)),
-              pw.Text(
-                'Página ${context.pageNumber} de ${context.pagesCount}',
-                style: const pw.TextStyle(fontSize: 8),
-              ),
-            ],
-          );
-        },
-        build: (pw.Context context) {
-          return [
-            pw.GridView(
-              crossAxisCount: 2,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              children: List.generate(productosImprimir.length, (i) {
-                return _buildPdfGridItem(
-                  productosImprimir[i],
-                  imagenesBytes[i],
-                  ivaFactor,
-                  primaryColor,
-                  lightGreyColor,
-                );
-              }),
-            ),
-          ];
-        },
-      ),
-    );
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-    );
-  }
+    final previousProduct = _productosFiltrados[index - 1];
 
-  Future<Uint8List> _loadImageBytes(String path) async {
-    if (path.startsWith('assets/')) {
-      final ByteData data = await rootBundle.load(path);
-      return data.buffer.asUint8List();
-    } else {
-      // It's a file path
-      final file = File(path);
-      if (await file.exists()) {
-        return await file.readAsBytes();
+    // Muestra el encabezado si el atributo de agrupación cambia.
+    if (_sortOption == SortOption.categoria) {
+      if (currentProduct.categoria != previousProduct.categoria) {
+        return currentProduct.categoria;
       }
-      throw Exception('Image file not found: $path');
+    } else if (_sortOption == SortOption.proveedor) {
+      if (currentProduct.proveedor != previousProduct.proveedor) {
+        return currentProduct.proveedor;
+      }
     }
+
+    // Si no, no se necesita un nuevo encabezado.
+    return null;
   }
 
   @override
@@ -442,44 +345,54 @@ class _MainScreenState extends State<MainScreen> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
+                          IconButton(
+                            icon: Icon(
+                              _isAscending
+                                  ? Icons.arrow_upward
+                                  : Icons.arrow_downward,
+                            ),
+                            tooltip: 'Cambiar Dirección de Orden',
+                            onPressed: () {
+                              setState(() {
+                                _isAscending = !_isAscending;
+                                _filtrarProductos();
+                              });
+                            },
+                          ),
                           Expanded(
-                            child: DropdownButton<SortOption>(
-                              isExpanded: true,
-                              hint: const Text('Ordenar por'),
-                              value: _sortOption,
-                              items: const [
-                                DropdownMenuItem(
-                                  value: SortOption.proveedor,
-                                  child: Text(
-                                    'Por Proveedor',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 12),
+                            flex: 2, // Darle más espacio al primer dropdown
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<SortOption>(
+                                isExpanded: true,
+                                hint: const Text('Ordenar por'),
+                                value: _sortOption,
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: SortOption.proveedor,
+                                    child: Text('Proveedor'),
                                   ),
-                                ),
-                                DropdownMenuItem(
-                                  value: SortOption.nombre,
-                                  child: Text(
-                                    'Por Nombre',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 12),
+                                  DropdownMenuItem(
+                                    value: SortOption.nombre,
+                                    child: Text('Nombre'),
                                   ),
-                                ),
-                                DropdownMenuItem(
-                                  value: SortOption.categoria,
-                                  child: Text(
-                                    'Por Categoría',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 12),
+                                  DropdownMenuItem(
+                                    value: SortOption.categoria,
+                                    child: Text('Categoría'),
                                   ),
+                                ],
+                                onChanged: (SortOption? newValue) {
+                                  if (newValue == null) return;
+                                  setState(() {
+                                    _sortOption = newValue;
+                                    _filtrarProductos();
+                                  });
+                                },
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black,
                                 ),
-                              ],
-                              onChanged: (SortOption? newValue) {
-                                if (newValue == null) return;
-                                setState(() {
-                                  _sortOption = newValue;
-                                  _filtrarProductos();
-                                });
-                              },
+                                itemHeight: 48,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8.0),
@@ -542,139 +455,72 @@ class _MainScreenState extends State<MainScreen> {
 
                 Expanded(
                   child: ListView.builder(
-                    itemCount: _productosFiltrados.length,
+                    itemCount:
+                        _productosFiltrados.length, // Un item por producto
                     itemBuilder: (context, index) {
-                      return ProductListItem(
-                        producto: _productosFiltrados[index],
-                        onTap: () =>
-                            _navegarYEditarProducto(_productosFiltrados[index]),
+                      final product = _productosFiltrados[index];
+                      final headerText = _getHeaderTextForIndex(index);
+
+                      final productItem = ProductListItem(
+                        producto: product,
+                        onTap: () => _navegarYEditarProducto(product),
                       );
+
+                      if (headerText != null) {
+                        return AnimatedListItem(
+                          index: index,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _GroupHeader(title: headerText),
+                              productItem,
+                            ],
+                          ),
+                        );
+                      }
+
+                      return AnimatedListItem(index: index, child: productItem);
                     },
                   ),
                 ),
               ],
             ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'add_product',
-            onPressed: _navegarYAgregarProducto,
-            tooltip: 'Agregar Nuevo Producto',
-            child: const Icon(Icons.add),
-          ),
-          const SizedBox(height: 16),
-          FloatingActionButton.extended(
-            heroTag: 'print_catalog',
-            onPressed: _generateAndPrintPdf,
-            tooltip: 'Imprimir Catálogo',
-            icon: const Icon(Icons.print),
-            label: const Text('Imprimir'),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'add_product',
+        onPressed: _navegarYAgregarProducto,
+        tooltip: 'Agregar Nuevo Producto',
+        child: const Icon(Icons.add),
       ),
       bottomNavigationBar: const AppFooter(),
     );
   }
 }
 
-pw.Widget _buildPdfGridItem(
-  Producto p,
-  Uint8List? imgBytes,
-  double ivaFactor,
-  PdfColor primaryColor,
-  PdfColor lightGreyColor,
-) {
-  final hasOffer = p.precioOferta > 0 && p.precioOferta < p.precioVenta;
+class _GroupHeader extends StatelessWidget {
+  final String title;
 
-  return pw.Container(
-    decoration: pw.BoxDecoration(
-      borderRadius: pw.BorderRadius.circular(8),
-      border: pw.Border.all(color: lightGreyColor, width: 1.5),
-    ),
-    child: pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: [
-        // --- Image Container ---
-        pw.Container(
-          height: 120,
-          decoration: pw.BoxDecoration(
-            color: PdfColors.white,
-            borderRadius: const pw.BorderRadius.vertical(
-              top: pw.Radius.circular(6),
-            ),
-          ),
-          child: imgBytes != null
-              ? pw.Image(pw.MemoryImage(imgBytes), fit: pw.BoxFit.contain)
-              : pw.Center(
-                  child: pw.Text(
-                    'Sin imagen',
-                    style: const pw.TextStyle(color: PdfColors.grey),
-                  ),
-                ),
+  const _GroupHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      margin: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+      //BARRA DE TITULOS POR CATEGORIA O PROVEEDOR
+      decoration: BoxDecoration(
+        color: Colors.grey.shade300,
+        border: Border(
+          bottom: BorderSide(color: Colors.red.shade300, width: 3),
         ),
-
-        // --- Details Container ---
-        pw.Expanded(
-          child: pw.Padding(
-            padding: const pw.EdgeInsets.all(8),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                // --- Product Name ---
-                pw.Text(
-                  p.nombre,
-                  maxLines: 3,
-                  overflow: pw.TextOverflow.clip,
-                  style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 11,
-                  ),
-                ),
-
-                // --- Prices ---
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    if (hasOffer && p.condicion.trim().isNotEmpty)
-                      pw.Text(
-                        p.condicion,
-                        style: pw.TextStyle(
-                          color: primaryColor,
-                          fontSize: 9,
-                          fontStyle: pw.FontStyle.italic,
-                        ),
-                      ),
-                    if (hasOffer) pw.SizedBox(height: 2),
-                    pw.Text(
-                      '\$${(p.precioVenta * ivaFactor).toStringAsFixed(0)}',
-                      style: pw.TextStyle(
-                        decoration: hasOffer
-                            ? pw.TextDecoration.lineThrough
-                            : null,
-                        color: hasOffer ? PdfColors.grey600 : PdfColors.black,
-                        fontSize: hasOffer ? 12 : 14,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    if (hasOffer)
-                      pw.Text(
-                        '\$${(p.precioOferta * ivaFactor).toStringAsFixed(0)}',
-                        style: pw.TextStyle(
-                          color: primaryColor,
-                          fontSize: 16,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+      ),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
